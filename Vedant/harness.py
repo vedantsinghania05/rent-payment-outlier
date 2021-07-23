@@ -28,22 +28,28 @@ df['PERIODYR'] = df['DATE'].map(lambda d: int(d.year))
 df['AMOUNT'] = df['AMOUNT'].map(lambda a: math.ceil(a))
 
 columns = [
-    ['GLCODE', 'GLNAME', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO']
+    ['GLCODE', 'GLNAME', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
+    ['GLNAME', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
+    ['GLCODE', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
+    ['PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO']
+
 ]
 
 parameters = [
-    [10000],
-    [0.22],
-    [7],
-    [0.2],
-    ['count:poisson']
+    [0.22], #learning_rate
+    [7], #max_depth
+    [0.2], #colsample_bytree
+    ['count:poisson'] #objective
 ]
 
-#parameters = [n_estimators, learning_rate, max_depth, colsample_bytree, objective]
 parameter_list = list(itertools.product(*parameters))
 
+report_df = pd.DataFrame(columns=[
+    'R2 (TR)', 'R2 (T)', 'MAE (T)', 'RMSE (T)', '5%', '10%', '20%', '100%', '200%', '500%', '1000%', '10000%', 'lr', 'md', 'cb', 'obj', 'columns'
+    ])
 
-def make_model(columns, n_estimators, learning_rate, max_depth, colsample_bytree, objective):
+
+def make_model(columns, learning_rate, max_depth, colsample_bytree, objective):
     X = pd.DataFrame(df, columns = columns)
     y = pd.Series(data = df['AMOUNT'])
     cat_cols = [col for col in X.columns if X[col].dtype == 'object']
@@ -72,14 +78,14 @@ def make_model(columns, n_estimators, learning_rate, max_depth, colsample_bytree
     X_train = label_X_train.copy()
     X_test = label_X_test.copy()
 
-    model = XGBRegressor(random_state = 1, n_jobs = -1, learning_rate = learning_rate, n_estimators = n_estimators, max_depth = max_depth, objective = objective, colsample_bytree = colsample_bytree)
+    model = XGBRegressor(random_state = 1, n_jobs = -1, learning_rate = learning_rate, n_estimators = 10000, max_depth = max_depth, objective = objective, colsample_bytree = colsample_bytree)
     model.fit(X_train, y_train, early_stopping_rounds = 25, eval_set = [(X_test, y_test)], verbose=False)
     training_preds = model.predict(X_train)
     test_preds = pd.Series(model.predict(X_test))
-    report(columns, y_train, y_test, training_preds, test_preds, n_estimators, learning_rate, max_depth, colsample_bytree, objective)
+    report(columns, y_train, y_test, training_preds, test_preds, learning_rate, max_depth, colsample_bytree, objective)
 
 
-def report(columns, y_train, y_test, training_preds, test_preds, n_estimators, learning_rate, max_depth, colsample_bytree, objective):
+def report(columns, y_train, y_test, training_preds, test_preds, learning_rate, max_depth, colsample_bytree, objective):
     percents_list = []
 
     for i in range(0, len(y_test)):
@@ -93,32 +99,34 @@ def report(columns, y_train, y_test, training_preds, test_preds, n_estimators, l
     percents_df.head()
 
     percents_df['Category (%)'] = percents_df.apply(lambda p: categorize_percents(p['percent_off']), axis=1)
-    percent_range_df = percents_df.groupby('Category (%)').size().reset_index(name='Count')
-    percent_range_df['Percent of Total (%)'] = percent_range_df['Count']/len(percents_df.index)*100
+    percents_df = (percents_df.groupby('Category (%)').size()/len(percents_df.index)*100).reset_index(name='perc. of tot')
+    percent_list = []
 
-    print('Parameters:', 'n_estimators =', n_estimators, 'learning_rate =', learning_rate, 'max_depth =', max_depth, 'colsample_bytree =', colsample_bytree, 'objective =', objective)
-    print('')
-    print('Columns:', columns)
-    print('')
-    print('Scores')
-    print('R\u00b2 (training):', r2_score(y_train, training_preds))
-    print('R\u00b2 (test):', r2_score(y_test, test_preds))
-    print('MAE (test):', mean_absolute_error(y_test, test_preds))
-    print('RMSE (test):', mean_squared_error(y_test, test_preds, squared=False))
-    print('')
-    print('% Off Distribution')
-    print(percent_range_df)
-    print('')
-    print('Preds')
-    print('Avg:', test_preds.mean())
-    print('Min:', test_preds.min())
-    print('Max:', test_preds.max())
-    print('')
-    print('Actuals')
-    print('Avg:', y_test.mean())
-    print('Min:', y_test.min())
-    print('Max:', y_test.max())
-    print('')
+    for i in percents_df['perc. of tot']:
+        percent_list.append(i)
+
+    new_row = {
+        'R2 (TR)': round(r2_score(y_train, training_preds), 3), 
+        'R2 (T)': round(r2_score(y_test, test_preds), 3), 
+        'MAE (T)': round(mean_absolute_error(y_test, test_preds), 3), 
+        'RMSE (T)': round(mean_squared_error(y_test, test_preds, squared=False), 3), 
+        '5%': round(percent_list[0], 3),
+        '10%': round(percent_list[1], 3), 
+        '20%': round(percent_list[2], 3), 
+        '100%': round(percent_list[3], 3), 
+        '200%': round(percent_list[4], 3),
+        '500%': round(percent_list[5], 3), 
+        '1000%': round(percent_list[6], 3), 
+        '10000%': round(percent_list[7], 3), 
+        'lr': learning_rate, 
+        'md': max_depth, 
+        'cb': colsample_bytree, 
+        'obj': objective, 
+        'columns': columns
+        }
+
+    global report_df
+    report_df = report_df.append(new_row, ignore_index = True)
 
 
 def categorize_percents(p):
@@ -147,7 +155,8 @@ def categorize_percents(p):
 for e in columns:
     columns = e
     for f in parameter_list:
-        make_model(columns, f[0], f[1], f[2], f[3], f[4])
+        make_model(columns, f[0], f[1], f[2], f[3])
+        print('completed an iteration')
 
 
-
+print(report_df.head())

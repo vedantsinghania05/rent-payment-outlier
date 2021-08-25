@@ -27,14 +27,37 @@ df['PERIODYR'] = df['DATE'].map(lambda d: int(d.year))
 
 df['AMOUNT'] = df['AMOUNT'].map(lambda a: math.ceil(a))
 
+full_cols =  {0: 'GLCODE', 1: 'GLNAME', 2: 'PROPERTY', 
+3: 'PROPERTYNAME', 4: 'UNIT', 5: 'DATE', 6: 'PERIOD', 
+7: 'DESCRIPTION', 8: 'CONTROL', 9: 'REFERENCE', 10: 'DEBITCREDIT',
+11: 'BALANCE', 12: 'REMARKS', 13: 'DATEDAY', 
+14: 'DATEMO', 15: 'DATEYR', 16: 'PERIODDAY', 
+17: 'PERIODMO', 18: 'PERIODYR'}
+
 columns = [
-    ['GLCODE', 'GLNAME', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
-    ['GLNAME', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
-    ['GLCODE', 'PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO'],
-    ['PROPERTY', 'PROPERTYNAME', 'UNIT', 'DESCRIPTION', 'REFERENCE', 'DEBITCREDIT', 'REMARKS', 'DATEDAY', 'DATEMO', 'PERIODDAY', 'PERIODMO']
+    [0,1,2,3,4,7,9,10,12,13,14,16,17], # CONTROL
+    [0,1,2,3,4,7,9,10,12,13,14,16],
+    [0,1,2,3,4,7,9,10,12,13,14,17],
+    [0,1,2,3,4,7,9,10,12,13,16,17],
+    [0,1,2,3,4,7,9,10,12,14,16,17],
+    [0,1,2,3,4,7,9,10,13,14,16,17],
+    [0,1,2,3,4,7,9,12,13,14,16,17],
+    [0,1,2,3,4,7,10,12,13,14,16,17],
+    [0,1,2,3,4,9,10,12,13,14,16,17],
+    [0,1,2,3,7,9,10,12,13,14,16,17],
+    [0,1,2,4,7,9,10,12,13,14,16,17],
+    [0,1,3,4,7,9,10,12,13,14,16,17],
+    [0,2,3,4,7,9,10,12,13,14,16,17],
+    [1,2,3,4,7,9,10,12,13,14,16,17],
+
+
 
 ]
 
+'''
+Notes
+Keep 0, 1, 7, 9, 10
+'''
 parameters = [
     [0.22], #learning_rate
     [7], #max_depth
@@ -42,7 +65,18 @@ parameters = [
     ['count:poisson'] #objective
 ]
 
+'''
+CONTROL
+learning_rate = 0.22
+max_depth = 7
+colsample_bytree = 0.2
+objective = 'count:poisson'
+'''
+
 parameter_list = list(itertools.product(*parameters))
+
+total_exp = len(parameter_list) * len(columns)
+done_exp = 0
 
 report_df = pd.DataFrame(columns=[
     'R2 (TR)', 'R2 (T)', 'MAE (T)', 'RMSE (T)', '5%', '10%', '20%', '100%', '200%', '500%', '1000%', '10000%', 'lr', 'md', 'cb', 'obj', 'columns'
@@ -152,11 +186,16 @@ def categorize_percents(p):
         return 'unknown'
 
 
+print('')
+
 for e in columns:
-    columns = e
+    accessed_list = [full_cols.get(key) for key in e]
+
     for f in parameter_list:
-        make_model(columns, f[0], f[1], f[2], f[3])
-        print('completed an iteration')
+        make_model(accessed_list, f[0], f[1], f[2], f[3])
+        done_exp += 1
+        print('{}/{} experiments completed'.format(done_exp, total_exp))
 
-
-print(report_df.head())
+print('')
+print(report_df.to_string())
+print('')
